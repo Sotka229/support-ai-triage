@@ -1,0 +1,55 @@
+[
+  {
+    "name": "happy_password_reset",
+    "comment": "Happy path: типовое обращение, безопасная категория, есть статья в базе знаний.",
+    "channel": "chat",
+    "external_id": "chat-88121",
+    "payload": {
+      "session_id": "88121",
+      "customer_tier": "standard",
+      "repeat_contact": 1,
+      "messages": [
+        {"author": "user", "text": "Добрый день! Забыл пароль, письмо для сброса не приходит на почту."},
+        {"author": "bot", "text": "Здравствуйте! Уточните адрес электронной почты."},
+        {"author": "user", "text": "Почта ivan.petrov@example.com, проверял папку спам, письма нет уже 20 минут."}
+      ]
+    }
+  },
+  {
+    "name": "risky_unauthorized_charge",
+    "comment": "Risky path: подозрение на мошенничество + платёжные PII. Автозакрытие запрещено всегда.",
+    "channel": "email",
+    "external_id": "msg-4412@mail.example.com",
+    "payload": {
+      "message_id": "msg-4412@mail.example.com",
+      "from": "i.petrov@example.com",
+      "subject": "С карты списали деньги без моего согласия",
+      "body": "<p>Здравствуйте!</p><p>С моей карты 4111 1111 1111 1111 списали 7500 рублей, эту операцию совершал не я. Похоже, аккаунт взломали.</p><p>Телефон для связи +7 (912) 345-67-89</p>-- \nИван Петров\n\n> 12.03 вы писали: спасибо за обращение\n"
+    }
+  },
+  {
+    "name": "degraded_app_bug",
+    "comment": "Fallback path: LLM недоступен, черновик не создаётся, тикет уходит оператору.",
+    "channel": "mobile",
+    "external_id": "mob-771",
+    "payload": {
+      "app_version": "5.2.1",
+      "os": "android",
+      "device": "Pixel 7",
+      "customer_tier": "standard",
+      "text": "После обновления приложение вылетает при загрузке фото в профиль",
+      "log_excerpt": "FATAL EXCEPTION: main java.lang.NullPointerException"
+    }
+  },
+  {
+    "name": "incident_service_unavailable",
+    "comment": "Инцидент: поток похожих обращений схлопывается в один кластер и один broadcast-ответ.",
+    "channel": "webform",
+    "external_id": "web-9001",
+    "payload": {
+      "form_id": "9001",
+      "category": "Технические проблемы",
+      "description": "Сайт не открывается, ошибка 503, ничего не грузится уже двадцать минут"
+    }
+  }
+]
