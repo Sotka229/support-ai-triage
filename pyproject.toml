@@ -1,0 +1,11 @@
+[project]
+name = "support-ai-triage"
+version = "0.1.0"
+description = "Triage Gateway PoC: классификация, риск-скоринг, маршрутизация и черновики ответов для поддержки"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+addopts = "-q"
