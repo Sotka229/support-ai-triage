@@ -26,8 +26,18 @@ python tools/effect_model.py
 ```
 
 Первая команда прогоняет четыре сценария end-to-end и печатает трассу решений.
-Вторая — 146 тестов (~2 секунды). Третья — пересчитывает таблицы эффекта из
+Вторая — 172 теста (~2 секунды; один помечен `xfail` — это задокументированный
+дефект валидатора, см. ниже). Третья — пересчитывает таблицы эффекта из
 [docs/product.md](docs/product.md): числа в документации порождаются кодом, а не текстом.
+
+Демо можно прогнать не на моке, а на настоящей локальной модели — если установлена
+[Ollama](https://ollama.com):
+
+```bash
+python demo.py --llm ollama:llama3.1:8b
+```
+
+Что из этого вышло и какой дефект вскрылся — [docs/poc-live-llm.md](docs/poc-live-llm.md).
 
 В контейнере (образ собирается и прогоняет тесты на этапе build):
 
@@ -55,7 +65,7 @@ docker build -t support-ai-triage . && docker run --rm support-ai-triage
 | Правила и красные флаги | реальный код | то же, вынесено в версионируемый конфиг |
 | Классификатор темы | TF-IDF char n-grams + центроид, 39 обучающих примеров — baseline | эмбеддинги (rubert-tiny2 / multilingual-e5-small, ONNX int8) + LogReg с калибровкой |
 | Поиск по базе знаний | TF-IDF по словам, 8 статей | BM25 (OpenSearch) + dense (pgvector/Qdrant) + RRF + cross-encoder |
-| Генерация черновика | мок: ответ собирается из статьи, придумать ничего не может | каскад self-hosted Qwen3-8B (vLLM) -> внешний frontier-API |
+| Генерация черновика | мок по умолчанию; опционально настоящая локальная LLM через Ollama (`--llm ollama`) | каскад self-hosted Qwen3-8B (vLLM) -> внешний frontier-API |
 | Валидаторы безопасности | реальный код: groundedness, PII, prompt injection, обещания денег | + NLI-проверка цитат, safety-suite в CI |
 | Политика решения | реальный код: пороги, allowlist, hard-deny | то же + A/B по версиям политики |
 | Аудит | JSONL с цепочкой хешей | append-only в PostgreSQL + выгрузка в S3 с WORM |
@@ -70,6 +80,12 @@ docker build -t support-ai-triage . && docker run --rm support-ai-triage
   архитектуре: у TF-IDF другое распределение косинусов, и порог отсечения — свойство ретривера.
 - Уверенность классификатора не калибрована и на чистых примерах вырождается в 1.0. Это
   известное свойство softmax по косинусам, а не признак качества модели.
+- Валидатор groundedness измеряет пересечение словоформ с источником, а не следование из него.
+  На прогоне живой модели это дало измеренный дефект: правдоподобная выдумка, собранная из
+  лексики базы знаний, получает 1.000 и проходит порог автозакрытия — причём разрыв тем шире,
+  чем больше фрагментов в контексте. Зафиксировано `xfail`-тестом в
+  [tests/test_safety_limits.py](tests/test_safety_limits.py), разбор — в
+  [docs/poc-live-llm.md](docs/poc-live-llm.md).
 - Обучающая и проверочная выборки лежат в разных файлах (39 и 15 примеров), качество меряется
   на holdout — но 15 примеров не дают статистики, это проверка работоспособности, не оценка.
 - Docker-образ описан, но локально не собирался: на машине разработки не поднят демон Docker.
@@ -100,6 +116,7 @@ docker build -t support-ai-triage . && docker run --rm support-ai-triage
 | [docs/ml.md](docs/ml.md) | ML/LLM-задачи, где правила, где модель, где LLM не нужен, валидация, разметка |
 | [docs/monitoring.md](docs/monitoring.md) | метрики, алерты, отличие деградации модели от смены потока, стоимость LLM |
 | [docs/risks-and-ops.md](docs/risks-and-ops.md) | highload и надёжность, privacy/safety/risk, топ-5 рисков |
+| [docs/poc-live-llm.md](docs/poc-live-llm.md) | прогон PoC на настоящей локальной LLM и два вскрытых дефекта |
 | [AI_USAGE.md](AI_USAGE.md) | как использовался AI, что было отклонено, реальные ошибки AI |
 | [WORKLOG.md](WORKLOG.md) | как распределён тайм-бокс и что вырезано из скоупа |
 | [SELF_REVIEW.md](SELF_REVIEW.md) | самое слабое место, нерешённые риски, что нужно до production |
@@ -108,9 +125,10 @@ docker build -t support-ai-triage . && docker run --rm support-ai-triage
 
 ```
 src/triage/      компоненты PoC: normalizer, pii, rules, classifier, dedup,
-                 retrieval, llm, safety, policy, audit, pipeline
+                 retrieval, llm, llm_ollama, safety, policy, audit, pipeline
 tools/           effect_model.py — расчёт годового эффекта, покрыт тестами
 data/            39 обучающих и 15 проверочных тикетов, 8 статей базы знаний, 4 сценария
-tests/           146 тестов: по модулю на файл плюс end-to-end сценарии
+tests/           172 теста: по модулю на файл, end-to-end сценарии и измеренные
+                 границы валидатора (test_safety_limits.py)
 demo.py          демонстрация четырёх путей + проверка аудит-лога
 ```
