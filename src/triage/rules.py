@@ -12,6 +12,7 @@ import re
 
 from .models import Queue, Risk, RuleOutcome, Ticket
 from .pii import PAYMENT_CLASSES
+from .safety import detect_injection
 
 # Каждая группа: (причина, паттерн, риск, очередь). Порядок не важен — риск
 # берётся максимальный из сработавших, причины накапливаются все.
@@ -87,15 +88,29 @@ def evaluate(ticket: Ticket) -> RuleOutcome:
         reasons.append(f"repeat_contact={ticket.repeat_contact}")
         risk = Risk.worst(risk, Risk.MEDIUM)
 
-    block_external_llm = bool(ticket.pii_classes & PAYMENT_CLASSES)
-    if block_external_llm:
+    payment_pii = bool(ticket.pii_classes & PAYMENT_CLASSES)
+    if payment_pii:
         reasons.append("payment_pii_present")
         risk = Risk.worst(risk, Risk.MEDIUM)
+
+    # Инъекция ищется в тексте тикета, а не в черновике. Разница принципиальная:
+    # черновик собирается из базы знаний, поэтому инъекция из обращения в него
+    # обычно не попадает — проверка черновика её просто не увидит. Атака же
+    # направлена на генератор, и остановить её нужно до генерации.
+    injection_markers = detect_injection(haystack)
+    if injection_markers:
+        reasons.append("prompt_injection")
+        reasons.extend(f"injection:{marker}" for marker in injection_markers)
+        # HIGH, а не CRITICAL: это не угроза жизни и не мошенничество с деньгами,
+        # но и не рядовой тикет — автозакрытие запрещено, нужен человек.
+        risk = Risk.worst(risk, Risk.HIGH)
 
     return RuleOutcome(
         risk=risk,
         deny_auto_close=bool(reasons),
         reasons=reasons,
         forced_queue=forced_queue,
-        block_external_llm=block_external_llm,
+        # Адверсарный текст не уезжает во внешний контур наравне с платёжными
+        # данными: его незачем отдавать третьей стороне ни в каком виде.
+        block_external_llm=payment_pii or bool(injection_markers),
     )
