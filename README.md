@@ -37,7 +37,9 @@ python tools/effect_model.py
 python demo.py --llm ollama:llama3.1:8b
 ```
 
-Что из этого вышло и какой дефект вскрылся — [docs/poc-live-llm.md](docs/poc-live-llm.md).
+Прогон на живой модели нужен не для красоты: мок цитирует базу знаний дословно, поэтому на нём
+нельзя проверить, удержат ли валидаторы систему, когда текст порождает модель. Он вскрыл три
+дефекта, которых на моке не видно, — они описаны в [SELF_REVIEW.md](SELF_REVIEW.md).
 
 В контейнере — образ прогоняет тесты на этапе build, поэтому неудачная сборка означает
 падение тестов, а не проблему окружения. Проверено: сборка 1 мин, образ 210 МБ,
@@ -87,7 +89,7 @@ docker build -t support-ai-triage . && docker run --rm support-ai-triage
   лексики базы знаний, получает 1.000 и проходит порог автозакрытия — причём разрыв тем шире,
   чем больше фрагментов в контексте. Зафиксировано `xfail`-тестом в
   [tests/test_safety_limits.py](tests/test_safety_limits.py), разбор — в
-  [docs/poc-live-llm.md](docs/poc-live-llm.md).
+  [SELF_REVIEW.md](SELF_REVIEW.md).
 - Обучающая и проверочная выборки лежат в разных файлах (39 и 15 примеров), качество меряется
   на holdout — но 15 примеров не дают статистики, это проверка работоспособности, не оценка.
 - Запуск проверен тремя способами: локально, с чистого клона репозитория и в контейнере
@@ -124,7 +126,6 @@ docker build -t support-ai-triage . && docker run --rm support-ai-triage
 | [docs/ml.md](docs/ml.md) | ML/LLM-задачи, где правила, где модель, где LLM не нужен, валидация, разметка |
 | [docs/monitoring.md](docs/monitoring.md) | метрики, алерты, отличие деградации модели от смены потока, стоимость LLM |
 | [docs/risks-and-ops.md](docs/risks-and-ops.md) | highload и надёжность, privacy/safety/risk, топ-5 рисков |
-| [docs/poc-live-llm.md](docs/poc-live-llm.md) | прогон PoC на настоящей локальной LLM и два вскрытых дефекта |
 | [AI_USAGE.md](AI_USAGE.md) | как использовался AI, что было отклонено, реальные ошибки AI |
 | [WORKLOG.md](WORKLOG.md) | как распределён тайм-бокс и что вырезано из скоупа |
 | [SELF_REVIEW.md](SELF_REVIEW.md) | самое слабое место, нерешённые риски, что нужно до production |
