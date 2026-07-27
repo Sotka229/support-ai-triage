@@ -1,6 +1,8 @@
 """Демонстрация PoC: четыре сценария от входящего тикета до записи в лог решения.
 
 Запуск:  python demo.py
+         python demo.py --llm ollama              # настоящая LLM вместо мока
+         python demo.py --llm ollama:llama3.1:8b  # конкретная модель
 
 Сценарии:
   1. happy path        — типовое обращение закрывается автоматически;
@@ -8,11 +10,14 @@
   3. fallback path     — LLM недоступен, система деградирует в маршрутизацию;
   4. incident path     — поток одинаковых жалоб схлопывается в один broadcast.
 
-Скрипт ничего не отправляет во внешние сервисы: LLM здесь мок (см. src/triage/llm.py).
+По умолчанию LLM — мок (см. src/triage/llm.py), внешних вызовов нет вообще.
+С флагом --llm ollama черновики генерирует локальная модель через Ollama
+(см. src/triage/llm_ollama.py): контур self-hosted, наружу ничего не уходит.
 """
 
 from __future__ import annotations
 
+import argparse
 import shutil
 import sys
 from pathlib import Path
@@ -85,12 +90,45 @@ def show(pipeline: TriagePipeline, raw: RawMessage, title: str) -> None:
         print("  генерация:        сознательно не выполнялась (это не деградация)")
 
 
-def main() -> int:
+def build_llm(spec: str):
+    """`mock` — шаблонный генератор; `ollama[:модель]` — локальная LLM."""
+    if spec == "mock":
+        return None
+    if not spec.startswith("ollama"):
+        raise SystemExit(f"неизвестный вариант --llm: {spec!r} (ожидается mock или ollama[:модель])")
+
+    from triage.llm_ollama import DEFAULT_MODEL, OllamaLLM
+
+    model = spec.split(":", 1)[1] if ":" in spec else DEFAULT_MODEL
+    print(f"LLM: локальная Ollama, модель {model}. Генерация на CPU занимает секунды на тикет.")
+    # Ретрай один: ждать вторую медленную генерацию в демо бессмысленно,
+    # для показа деградации есть отдельный сценарий 3.
+    return GuardedLLM(OllamaLLM(model=model, timeout=600.0), retries=1)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Демонстрация PoC Triage Gateway")
+    parser.add_argument(
+        "--llm",
+        default="mock",
+        help="mock (по умолчанию) или ollama[:модель] — генерация настоящей локальной LLM",
+    )
+    args = parser.parse_args(argv)
+
     if AUDIT_PATH.parent.exists():
         shutil.rmtree(AUDIT_PATH.parent)
 
     scenarios = {s.name: s for s in load_scenarios(DATA / "scenarios.json")}
     pipeline = TriagePipeline.build(data_dir=DATA, audit_path=AUDIT_PATH)
+
+    real_llm = build_llm(args.llm)
+    if real_llm is not None:
+        pipeline = TriagePipeline(
+            classifier=pipeline.classifier,
+            knowledge_base=pipeline.kb,
+            llm=real_llm,
+            audit=pipeline.audit,
+        )
 
     header("1. HAPPY PATH: типовое обращение, безопасная категория")
     show(pipeline, scenarios["happy_password_reset"].raw, "чат: забыл пароль")
