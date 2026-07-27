@@ -32,7 +32,7 @@ Service Management). Он владеет решением «что это за �
 ## 2. Схема компонентов
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph CH["Каналы"]
     C1["Чат"]
     C2["Email"]
